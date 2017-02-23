@@ -1,18 +1,20 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.IO;
-using Vuforia;
+using UnityEngine.UI;
 
 public class TakePicture : MonoBehaviour 
 {
+	//*****THE getData.php FILE THAT YOU NEED TO HOST ON A SERVER THAT HAS NODE.JS INSTALLED IS IN THE ASSETS FOLDER!*****
+
 	//change this to reflect your custom hosted url followed by getData.php?url=
-	private const string BASE_URL = "http://matthewhallberg.com/getData.php?url=";
+	private const string BASE_URL = "<YOUR-WEBSITE.COM>/getData.php?url=";
 	//enter your google api key for custom search here
-	private const string GOOGLE_API_KEY = "AIzaSyDodug2PxwmfUVGFo2S67XeWldSoEJbbzU";
+	private const string GOOGLE_API_KEY = "**********************************";
 	//enter your cloud name from cloudinary here
-	private const string CLOUD_NAME = "db9b6mptp";
+	private const string CLOUD_NAME = "**********";
 	//enter your cloudinary upload preset name
-	private const string UPLOAD_PRESET_NAME = "ccbdk7zf";
+	private const string UPLOAD_PRESET_NAME = "**********";
 
 	//private const string CLOUDINARY_API_KEY = "464228211727792";
 
@@ -21,10 +23,6 @@ public class TakePicture : MonoBehaviour
 	private const string IMAGE_SEARCH_URL = "https://www.google.com/searchbyimage?site=search&sa=X&image_url=";
 
 	private const string GOOGLE_SEARCH_URL = "https://www.googleapis.com/customsearch/v1?key=" + GOOGLE_API_KEY +"&cref&q=";
-
-	WebCamTexture cameraTexture;
-
-	private Image.PIXEL_FORMAT mPixelFormat = Image.PIXEL_FORMAT.UNKNOWN_FORMAT;// or RGBA8888, RGB888, RGB565, YUV
 
 	byte[] imageByteArray;
 
@@ -54,13 +52,19 @@ public class TakePicture : MonoBehaviour
 		line1Object = GameObject.Find ("line1");
 		line2Object = GameObject.Find ("line2");
 
-
+		//set default states of UI 
 		scanningObject.SetActive (false);
 		line1Object.SetActive (false);
+		line1Object.transform.parent.gameObject.SetActive (false);
 		line2Object.SetActive (false);
+		line2Object.transform.parent.gameObject.SetActive (false);
 
 	}
 
+	/*this takes a screenshot, saves it to file, and reads the file to the variable imageByteArray
+	 * I tried other methods of taking a picture like using Vuforia's Image class and also creating another
+	 * Unity webcamtexture, none of which worked on both mobile and in the editor so this is what I landed on
+	 */ 
 	public IEnumerator TakePhoto()
 	{
 		string filePath;
@@ -70,14 +74,17 @@ public class TakePicture : MonoBehaviour
 
 				filePath = Application.persistentDataPath + "/image.png";
 				Application.CaptureScreenshot ("/image.png");
-				yield return new WaitForSeconds (.1f);
+				//must delay here so picture has time to save unfortunatly
+				yield return new WaitForSeconds(1.5f);
 				//Encode to a PNG
 				imageByteArray = File.ReadAllBytes(filePath);
+
 			} else {
 
 				filePath = Application.dataPath + "/StreamingAssets/" + "image.png";
 				Application.CaptureScreenshot (filePath);
-				yield return new WaitForSeconds (.1f);
+				//must delay here so picture has time to save unfortunatly
+				yield return new WaitForSeconds(1.5f);
 				//Encode to a PNG
 				imageByteArray = File.ReadAllBytes(filePath);
 			}
@@ -85,8 +92,11 @@ public class TakePicture : MonoBehaviour
 		print ("photo done!!");
 		StartCoroutine("UploadImage");
 
-	}
+		buttonObject.SetActive (false);
+		scanningObject.SetActive (true);
 
+	}
+	//uploads the image to Cloudinary (you must first create an unsigned upload preset for this to work) and gets the image url
 	public IEnumerator UploadImage(){
 
 		print ("uploading image...");
@@ -119,6 +129,11 @@ public class TakePicture : MonoBehaviour
 
 	}
 
+	/*this function passes the image url to the php script called getData.php that you must have hosted somewhere that node.js is also installed.
+	 * The php will parse the line from the Google reverse image search that contains the best guess as to what the image is.
+	 * This was the only way I could figure to follow the redirects from Google and also be able to see the HTML rendered from the Javascript.
+	 * We can then take that line and parse it down further to get our wordsToSearch variable. 
+	 */ 
 	public IEnumerator reverseImageSearch(){
 
 		//create the full search url by adding all 3 together
@@ -137,6 +152,7 @@ public class TakePicture : MonoBehaviour
 
 	}
 
+	//This does a custom google search for the wordsToSearch (google's best guess) 
 	public IEnumerator GoogleSearchAPI(){
 
 		string searchURL = GOOGLE_SEARCH_URL + WWW.EscapeURL (wordsToSearch);
@@ -198,12 +214,15 @@ public class TakePicture : MonoBehaviour
 		//turn on both 3d text objects
 		line1Object.SetActive (true);
 		line2Object.SetActive (true);
+		line1Object.transform.parent.gameObject.SetActive (true);
+		line2Object.transform.parent.gameObject.SetActive (true);
+
 
 		//replace the spaces in the best guess result from google with new lines (if there are any)
 		if (text1.Contains(" ")){
 			text1 = text1.Replace(" ","\n");
 		}
-		line1Object.GetComponent<TextMesh> ().text = text1;
+		line1Object.GetComponent<Text> ().text = text1;
 
 		//remove new line characters from text3
 		if (text3.Contains("\\n")){
@@ -235,31 +254,20 @@ public class TakePicture : MonoBehaviour
 		}
 
 		//I decided to not display the title of the webpage (text2) but you can add it here if you like. 
-		line2Object.GetComponent<TextMesh> ().text = text3;
-
-		//Set the text positions to the values we saved when the scan button was pressed.
-		line1Object.transform.position = cameraForwardVector + new Vector3 (-3.78f, .4f, 14.87f);
-		line2Object.transform.position = cameraForwardVector + new Vector3 (4.18f, .33f, 15.6f);
-
-		line1Object.transform.LookAt (cameraPosition);
-		line2Object.transform.LookAt (cameraPosition);
-
-		line1Object.transform.localEulerAngles += new Vector3 (0, 180f, 0);
-		line2Object.transform.localEulerAngles += new Vector3 (0, 180f, 0);
+		line2Object.GetComponent<Text> ().text = text3;
 
 	}
 
 	//this is the function that gets called when the scan button is pressed.
 	public void StartCamera(){
-
-		buttonObject.SetActive (false);
-		scanningObject.SetActive (true);
+		//turn off text and backgrounds
 		line1Object.SetActive (false);
 		line2Object.SetActive (false);
+		line1Object.transform.parent.gameObject.SetActive (false);
+		line2Object.transform.parent.gameObject.SetActive (false);
+
 		print ("button down....");
+		//starts the process
 		StartCoroutine ("TakePhoto");
-		//save camera values here so we can use them when the processes are down
-		cameraForwardVector = Camera.main.transform.forward;
-		cameraPosition = Camera.main.transform.position;
 	}
 }
